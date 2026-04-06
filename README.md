@@ -15,12 +15,13 @@ That usually means separating:
 - the core identity and operating rules
 - the durable state that gives the agent continuity
 - the actual skills it uses to do its work
+- the original operating semantics that tell the runtime how this agent actually works
 
 Then it can reconstruct that agent in another runtime using that runtime's native shape.
 
 It has two top-level actions:
 
-- `pack`: inspect a source agent project, identify its canonical `soul`, `state`, and `skills`, then write `manifest.yaml` and `binding.json`
+- `pack`: inspect a source agent project, identify its canonical `soul`, `state`, `skills`, and workflow dependencies, then write `manifest.yaml` and `binding.json`
 - `deploy`: reconstruct that packed agent into a target runtime using that runtime's native conventions
 
 This repo intentionally stays minimal:
@@ -53,6 +54,10 @@ If you migrate an agent by filename alone, you often keep the shell and lose the
 - `state`: persistent non-soul, non-skill files the agent must keep in order to continue working as the same agent
 - `skills`: skill directories the agent directly or indirectly uses in its normal workflow
 
+It also tracks something just as important:
+
+- `operating semantics`: the source agent's real file usage, skill usage, and working flow
+
 Supporting artifact:
 
 - `snapshot`: an optional portable archive produced during `pack`
@@ -66,8 +71,8 @@ Supporting artifact:
 It should:
 
 1. understand how the source runtime expresses the agent
-2. normalize that into canonical semantics
-3. reconstruct those semantics in the target runtime's best-practice shape
+2. preserve the source agent's operating semantics in canonical form
+3. reconstruct those semantics in the target runtime's best-practice startup shape
 
 ## Runtime References
 
@@ -81,6 +86,7 @@ These references define:
 
 - runtime entrypoints
 - native file responsibilities
+- startup behavior and file-loading expectations
 - cross-runtime reconstruction rules
 - verification checklists
 - anti-patterns
@@ -98,6 +104,7 @@ You point `packasoul` at an agent project.
 It should come back with something like:
 
 - `soul`: this is the one core file
+- `operating semantics`: this is how the source agent actually works
 - `state`: these files are necessary for continuity
 - `skills`: these are the skills the agent actually uses
 
@@ -115,7 +122,7 @@ From there it can:
 1. inspect the project
 2. infer or confirm the source runtime
 3. read the source runtime reference
-4. identify `soul`, `state`, and `skills`
+4. identify `soul`, `workflow`, `state`, and `skills`
 5. show the proposal to the user
 6. write `manifest.yaml` and `binding.json`
 7. optionally generate a snapshot
@@ -126,10 +133,10 @@ From there it can:
 2. confirm the target runtime
 3. read the target runtime reference
 4. show a deploy plan
-5. reconstruct the target runtime files directly
-6. verify soul, state, and skills in the target workspace
+5. reconstruct the target runtime startup graph and files directly
+6. verify soul, state, skills, and memory behavior in the target workspace
 
-Deploy should be runtime-native reconstruction, not naive filename remapping.
+Deploy should be runtime-native reconstruction of both file layout and startup behavior, not naive filename remapping.
 
 ## Repository Layout
 

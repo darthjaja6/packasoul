@@ -7,13 +7,9 @@ description: Packs an agent project into canonical agent semantics and an option
 
 ## Mission
 
-Use this skill when the user wants to:
+Use this skill when the user wants to pack an agent project, inspect what belongs in a manifest, or deploy that packed agent into another runtime.
 
-- pack an agent project
-- inspect what should go into a manifest
-- deploy a packed agent into another agent runtime
-
-This skill owns the full pack and deploy workflow.
+This skill owns the full pack and deploy workflow. The goal is not to move filenames around. The goal is to preserve how the agent actually works.
 
 ## Inputs And Outputs
 
@@ -36,31 +32,52 @@ Outputs for `deploy`:
 
 ## Core Concepts
 
-- `soul`: the single core file that defines the agent's identity, behavior, and operating rules
-- `skills`: skill directories the agent directly or indirectly uses in its working workflow
+- `soul`: the single core file that most directly defines the agent's identity, behavior, and operating rules
 - `state`: non-soul, non-skill files the agent must keep in order to continue working as the same agent
+- `skills`: skill directories the agent directly or indirectly uses in its normal workflow
+- `operating semantics`: the source agent's actual working logic, including how it uses files, what it reads before speaking, what it updates, and how it brings skills into the loop
+
+These categories are containers, not the main point.
+
+The main point is to preserve the source agent's operating semantics.
+
+`state` is not just "important files in the repo." A file matters because the source agent's workflow depends on it. A deploy is correct only if the target runtime still makes the agent work through those dependencies in a coherent way.
 
 ## Classification Framework
 
 Classify the project in this order:
 
-1. Find the single `soul` file.
-2. Read the `soul` carefully before proposing anything else.
-3. Summarize the soul's core workflow in a few short bullets.
-4. Classify every candidate file or directory by its relationship to that workflow.
+1. identify the source runtime
+2. read the matching runtime reference
+3. find the single `soul` file
+4. read the `soul` carefully before proposing anything else
+5. extract the agent's working workflow
+6. classify every candidate file or directory by its relationship to that workflow
 
 Use these classes:
 
 - `soul`: the one core file
-- `skills`: skill directories the workflow directly calls, plus their indirect dependencies
 - `state`: non-soul, non-skill files the workflow must read, reference, maintain, or preserve for future work
+- `skills`: skill directories the workflow directly calls, plus their indirect dependencies
 - `neither`: everything else
+
+When extracting the workflow, capture these relationships explicitly:
+
+- how the agent starts a conversation
+- which files it relies on and why
+- what it updates over time
+- how and when it uses skills
+- what ordering or priority matters inside that workflow
+- which files the runtime auto-loads versus which files only work because the source instructions tell the agent to read them
 
 Use the relationship test when proposing `state` or `skills`:
 
-- explain which part of the soul workflow points to this item
+- explain which part of the workflow points to this item
+- explain whether the item is runtime-loaded, explicitly read later, or only written during maintenance
 - explain whether the item is used directly by the soul or by a soul-invoked skill
-- exclude items that only look important to the repository but are not part of the workflow
+- exclude items that only look important to the repository but are not part of the working loop
+
+Do not force the source workflow into a rigid predeclared schema. If the source agent has a distinctive way of sequencing reads, consulting notes, or updating memory, preserve that logic in plain language first and only then classify the files.
 
 Only write items that currently exist into `manifest.yaml` and `binding.json`.
 If the workflow clearly expects a future state file, directory, or skill that is not present yet, mention it during confirmation as an expected missing item, but do not write it into the current manifest.
@@ -75,7 +92,7 @@ Treat these as `neither` unless the workflow clearly depends on them:
 - direct deliverables of the current task
 - skill inventory or skill products the agent manages but does not itself use
 
-Templates, rule files, HTML/Markdown assets, and similar materials should count as `state` if the workflow needs them again in normal future work.
+Templates, rule files, HTML or Markdown assets, and similar materials should count as `state` if the workflow needs them again in normal future work.
 
 When the workflow refers to a local skill and it is not present in the expected project-local skill path, check the source runtime's global skill location before excluding it.
 
@@ -94,23 +111,13 @@ Before reasoning about a runtime, read the matching reference:
 Use references in both directions:
 
 - during `pack`, to understand how the source runtime expresses the agent
-- during `deploy`, to understand how the target runtime should express the agent
+- during `deploy`, to understand how the target runtime actually needs to express the agent
 
 Do not reason about runtime-specific files without consulting the matching reference.
 
 ## Pack Workflow
 
 ### 1. Inspect
-
-Inspect the current project in this order:
-
-- the most likely source runtime
-- the `soul`
-
-Then read the `soul` and extract its core workflow before proposing:
-
-- the `state`
-- the `skills`
 
 Source runtime selection rules:
 
@@ -120,15 +127,39 @@ Source runtime selection rules:
 - keep the choices minimal: `codex`, `claude-code`, `openclaw`
 - after the user chooses, read that runtime's reference before classifying `soul`, `state`, or `skills`
 
+Then inspect in this order:
+
+- the runtime reference
+- the `soul`
+- the files and directories the `soul` depends on
+
+Before proposing `state` or `skills`, summarize the workflow in a few short bullets:
+
+- how the agent starts work
+- which files are indispensable and why
+- what it writes back over time
+- how skills fit into the loop
+- what would break if those relationships were lost
+
 ### 2. Confirm
 
 Before writing files, present a short checklist:
 
 - soul
+- operating semantics
 - state
 - skills
 
-For each proposed state file or skill, briefly explain its relationship to the soul workflow.
+For each proposed state file or skill, briefly explain its relationship to the workflow.
+Call out especially:
+
+- required startup files
+- runtime-loaded files
+- required files that are not auto-loaded by the runtime
+- expected missing items
+
+The user should be able to see not just which files were selected, but what source-runtime behavior those files are preserving.
+
 If a workflow expects a missing future item, call it out separately as missing rather than writing it into the manifest.
 
 Ask the user to confirm or correct it.
@@ -150,15 +181,13 @@ Rules:
 
 ### 4. Optional Archive
 
-After writing the files, always ask:
-
-`Do you want me to generate a snapshot now?`
-
-If yes:
+If the user wants a portable artifact for transfer, sharing, or backup:
 
 - create the snapshot directly in the workspace
 - include `state/` only if the user asked for it
 - use normal file operations and zip creation as needed
+
+Do not treat snapshot generation as mandatory if the user only asked to pack and deploy in place.
 
 ## Deploy Workflow
 
@@ -171,14 +200,24 @@ Inspect:
 - the requested target runtime
 - the requested target location, workspace, or agent id
 
+Then read the target runtime reference and reconstruct the target runtime's actual startup model:
+
+- which files are automatically loaded
+- which files must be referenced from those startup files
+- which defaults may conflict with the packaged agent
+- which state files must stay as ordinary files but still be explicitly read during normal work
+
 ### 2. Plan
 
 Before executing anything, explain:
 
-- where the soul will land
+- which target files will become the runtime entrypoints
+- where the canonical soul material will land
 - where the state will land
 - where the skills will land
-- whether any target-runtime helper files must be synthesized, merged, or removed
+- how the source operating semantics will be preserved in the target runtime
+- whether any target-runtime helper files must be synthesized, merged, downgraded, or removed
+- whether any stale or conflicting files must be neutralized
 
 Then ask the user to confirm the deploy plan.
 
@@ -192,7 +231,9 @@ Default:
 
 - create or rewrite the target runtime files directly
 - preserve important supporting files
-- synthesize thin runtime entrypoints when needed
+- synthesize runtime-native entrypoints when needed
+- preserve the source agent's operating semantics, not just the file inventory
+- remove or neutralize files that would contradict the packaged agent's identity or workflow in the target runtime
 
 Do not introduce an extra execution layer just to preserve an artificial boundary.
 
@@ -200,6 +241,16 @@ Do not introduce an extra execution layer just to preserve an artificial boundar
 
 After deployment, tell the user how to verify:
 
-- the soul file
-- the state files
+- the identity entrypoint
+- the workflow entrypoint
+- the required state files
 - the skill directories
+- the working-memory behavior
+
+Verification should include live-behavior checks whenever practical. For example:
+
+- can the agent describe itself correctly
+- does it know prior user or project context it should know
+- does it name the expected skills
+- does it reference the expected state files when asked how it works
+- does it behave as though the original file-dependent workflow actually survived

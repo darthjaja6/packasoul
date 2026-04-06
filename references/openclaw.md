@@ -1,212 +1,276 @@
-# OpenClaw Deploy Reference
+# OpenClaw Runtime Reference
 
-Use this reference when deploying a `packasoul` snapshot into OpenClaw.
+Use this reference when `packasoul` needs to understand or deploy an agent into OpenClaw.
 
-The goal is not to hard-map manifest fields one-to-one.
-The goal is to reconstruct an OpenClaw-native agent workspace from the canonical snapshot.
+The goal is not to rename files into an OpenClaw-looking tree.
+The goal is to reconstruct an OpenClaw workspace whose startup behavior matches the packaged agent.
 
-## Core Principle
+The controlling principle is simple:
 
-OpenClaw expects a workspace made of several cooperating markdown files.
+Preserve the source agent's operating semantics first. Use OpenClaw's files as the expression layer for that behavior, not as a fixed mold that the source agent must be squeezed into.
 
-The deploy skill should:
+## What Matters In OpenClaw
 
-1. read the canonical `manifest`
-2. read the actual snapshot contents
-3. understand what each piece means in OpenClaw terms
-4. synthesize an OpenClaw-native workspace
-5. keep `SOUL.md` and `AGENTS.md` distinct when identity and process are meaningfully different
+OpenClaw is not just a folder layout. It is a startup graph.
 
-Do not blindly copy everything into fixed destinations.
+Some files are commonly injected into the runtime prompt.
+Other files merely exist in the workspace and must be read later because the injected files tell the agent to read them.
 
-## OpenClaw Workspace Files
+That distinction is critical.
+
+If deployment preserves the files but breaks the startup graph, the agent may keep its persona while forgetting its actual working memory.
+
+This is why OpenClaw deploy must be based on semantic fit, not file renaming.
+
+## Observed Runtime Shape
+
+In a mature OpenClaw workspace, the runtime commonly treats these files as startup-facing workspace docs:
+
+- `AGENTS.md`
+- `SOUL.md`
+- `TOOLS.md`
+- `IDENTITY.md`
+- `USER.md`
+- `HEARTBEAT.md`
+- sometimes `BOOTSTRAP.md`
+
+Do not assume ordinary state files are auto-loaded just because they exist in the workspace.
+
+Files such as:
+
+- `profile.json`
+- `log.md`
+- `plan.md`
+- `activities/*`
+- `memory/*`
+
+may need to remain ordinary files that are explicitly read through startup instructions.
+
+This means OpenClaw deployment has two jobs:
+
+1. place files in sensible locations
+2. make sure the injected startup files point to the right non-injected files
+
+## OpenClaw File Roles
 
 ### `SOUL.md`
 
-Purpose:
+Use `SOUL.md` for:
 
-- core identity
-- durable behavior
-- non-negotiable principles
-- the agent's center of gravity
+- durable identity
+- stable behavioral principles
+- non-negotiable role constraints
+- the agent's long-lived center of gravity
 
-Good inputs:
+`SOUL.md` should answer:
 
-- canonical `soul`
-- stable behavioral rules from state
-- compact identity statements
+- who am I
+- what kind of agent am I
+- what values or style should remain stable across sessions
 
-When the source snapshot comes from a flatter runtime, `SOUL.md` should usually become the stable identity anchor rather than a full dump of the source entrypoint.
-
-Do not dump every state file into `SOUL.md`.
+Do not turn `SOUL.md` into a dump of every remembered fact or every workflow file.
 
 ### `AGENTS.md`
 
-Purpose:
+Use `AGENTS.md` for:
 
-- working style
-- execution rules
-- repo or workflow discipline
-- coordination / process rules
+- startup instructions
+- working process
+- execution discipline
+- explicit file-read and file-write workflow
+- how the runtime should traverse supporting state
 
-Good inputs:
+`AGENTS.md` should answer:
 
-- process-oriented parts of the canonical `soul`
-- `project_rules`
-- workflow-heavy state
+- what should I read before replying
+- what should I update after working
+- what workspace rules override generic defaults
 
-If a source soul is mostly a development workflow document, some of it belongs here instead of all of it staying in `SOUL.md`.
+For OpenClaw, this is the most important bridge file.
 
-For cross-runtime deploys, a thin synthesized `AGENTS.md` is often better than renaming another runtime's entry file verbatim.
+If the packaged agent depends on ordinary files such as `profile.json`, `log.md`, or `activities/*`, `AGENTS.md` must make that dependency explicit unless another injected file already does so cleanly.
+
+In other words, `AGENTS.md` is not just "process notes." It is often the bridge that preserves the original agent's file-usage logic inside OpenClaw.
 
 ### `IDENTITY.md`
 
-Purpose:
+Use `IDENTITY.md` for:
 
 - name
-- outward identity
-- creature / vibe / emoji / avatar style
+- outward persona markers
+- presentation details such as vibe, creature, emoji, or avatar style
 
-Good inputs:
-
-- explicit identity state
-- clear persona markers inside canonical `soul`
-
-If the source agent has no strong named persona, synthesize a minimal stable identity from role and repo context.
-
-Do not leave a mature deployed agent with the default OpenClaw bootstrap identity template unless there is no better signal.
+Do not let an empty or generic `IDENTITY.md` outrank a mature packaged identity.
 
 ### `USER.md`
 
-Purpose:
+Use `USER.md` for:
 
-- what the agent knows about the human
+- who the human is
 - how to address them
-- recurring preferences or context
-
-Good inputs:
-
-- `user_profile`
-- explicit user notes
-- stable preference state
+- stable personal preferences
+- recurring user-specific context
 
 ### `TOOLS.md`
 
-Purpose:
+Use `TOOLS.md` for:
 
 - tool usage rules
-- connector / integration boundaries
-- operational constraints
-
-Good inputs:
-
-- `tool_notes`
-- tool-related parts of the source soul
+- connectors and integrations
+- operational boundaries
+- local environment notes
 
 ### `MEMORY.md`
 
-Purpose:
+Use `MEMORY.md` for:
 
 - curated long-term memory
-- distilled context worth carrying forward
-
-Good inputs:
-
-- `memory_curated`
-- durable summaries synthesized from state
+- distilled context that should be reloaded as summarized memory
 
 ### `memory/`
 
-Purpose:
+Use `memory/` for:
 
-- memory log files
-- timestamped or rolling history
+- rolling or dated memory logs
+- append-heavy history files that match OpenClaw's memory conventions
 
-Good inputs:
+### Ordinary State Files
 
-- `memory_log`
+Not every important file should be converted into an OpenClaw-native filename.
+
+These often remain ordinary files:
+
+- `profile.json`
+- `log.md`
+- `plan.md`
+- `activities/*`
+- project-specific ledgers or reports
+
+That is fine, as long as the startup graph makes the agent read them when needed.
+
+Do not promote an ordinary file into an OpenClaw-native filename unless that improves semantic fit. Many source agents work best when these files stay exactly what they are.
 
 ### `skills/`
 
-Purpose:
-
-- per-agent skills available inside the OpenClaw workspace
-
-Deploy all canonical `skills[]` into:
+Deploy canonical skills into:
 
 ```text
 <workspace>/skills/<name>/
 ```
 
+Skills should not be the only place where critical memory or workflow rules live.
+
 ## Bootstrap Rule
 
-For a mature deployed agent:
+`BOOTSTRAP.md` is dangerous in mature deploys.
 
-- `BOOTSTRAP.md` should not remain the primary source of identity
-- if OpenClaw auto-generated a generic bootstrap file, the deploy skill should remove it or make it irrelevant
+If it still contains generic "you just woke up" or "there is no memory yet" language, it can directly contradict the packaged agent.
 
-Otherwise the agent may answer like a fresh generic OpenClaw assistant instead of the packaged agent.
+For mature deployed agents:
 
-## Reconstruction Heuristic
+- remove `BOOTSTRAP.md`, or
+- rewrite it to be harmless, or
+- make it clearly irrelevant from the actual startup graph
 
-Recommended kind-to-shape mapping:
+Do not leave a generic bootstrap file active beside a mature packaged identity.
+
+## Reconstruction Model
+
+Think in two layers.
+
+### Layer 1: file placement
+
+Place state where it naturally belongs:
 
 - `identity` -> `IDENTITY.md` or `SOUL.md`
-- `user_profile` -> `USER.md`
+- `user_profile` -> `USER.md` or ordinary profile file plus startup reference
 - `tool_notes` -> `TOOLS.md`
 - `memory_curated` -> `MEMORY.md`
-- `memory_log` -> `memory/<...>`
-- `project_rules` -> `AGENTS.md` or another workflow doc referenced from it
-- `plan` -> keep as ordinary workspace file unless it clearly belongs in `AGENTS.md`
-- `activity` -> keep as ordinary workspace file
-- `custom` -> keep the canonical logical path unless OpenClaw has a clearly better native home
+- `memory_log` -> `memory/<...>` or ordinary log file if that exact file matters to the workflow
+- `project_rules` -> `AGENTS.md`
+- `plan` -> ordinary workspace file unless it is truly startup-critical
+- `activity` -> ordinary workspace files
+- `custom` -> keep the logical path unless OpenClaw has a clearly better native home
 
-Cross-runtime deploy rule:
+### Layer 2: startup graph
 
-- if canonical `soul` already separates identity and process in an OpenClaw-native way, preserve that shape
-- otherwise treat the canonical `soul` as source material, not as a file to rename blindly
+After placing files, decide:
+
+- which files OpenClaw will likely inject automatically
+- which files the agent still needs to read explicitly
+- where those read instructions should live
+- which stale files must be removed so they do not compete with the intended startup path
+
+If a source agent's continuity depends on files like `profile.json`, `log.md`, and `activities/*`, deployment is incomplete unless an injected startup file tells the agent to read them.
+
+The question is not "where can I place this file?"
+The question is "how will the deployed agent continue to use this file the way the source agent used it?"
+
+## Cross-Runtime Deploy Rules
+
+When the source agent comes from a flatter runtime such as Claude Code or Codex:
+
+- treat the canonical `soul` as source material, not as a file to rename blindly
 - synthesize a compact `SOUL.md` for durable identity
-- synthesize a compact `AGENTS.md` for workflow and operating rules
-- keep the fuller source material as supporting files when needed
+- synthesize a compact `AGENTS.md` for workflow and file dependency instructions
+- preserve supporting state in natural OpenClaw locations
+- explicitly bridge any must-read ordinary files into the startup graph
 
-Use this order:
+When the source agent already has a strong file workflow, preserve that logic even if the filenames change.
 
-1. restore state files and skills
-2. classify which parts of the canonical `soul` are identity versus process
-3. synthesize or preserve `SOUL.md` as the durable identity anchor
-4. synthesize or preserve `AGENTS.md` as the workflow entrypoint
-5. place state into the most natural OpenClaw files
-6. keep unmatched state as ordinary workspace files
-7. remove or neutralize conflicting bootstrap defaults
+If the source soul says, in effect, "before I answer, I read these files in this order," then the OpenClaw deploy is only correct if the new workspace still causes that behavior to happen.
 
-Recommended startup graph after deploy:
+What must survive is not just:
 
-1. `SOUL.md` says who the agent is
-2. `AGENTS.md` says how the agent works
-3. `USER.md`, `TOOLS.md`, `MEMORY.md`, and `memory/` hold long-lived supporting state
-4. ordinary files remain available for narrower future work
+- identity
+- state
+- skills
+
+It is also:
+
+- startup reads
+- ongoing reads
+- write-back rules
+- conflict resolution between startup-facing files
+
+## Recommended Deploy Order
+
+1. read the canonical `soul` and required state files
+2. identify the agent's startup reads, working reads, writes, and skills
+3. restore state files and skills into their OpenClaw locations
+4. synthesize or preserve `SOUL.md` as the durable identity anchor
+5. synthesize or preserve `AGENTS.md` as the startup and workflow bridge
+6. place user, tool, identity, and memory state into native OpenClaw files where appropriate
+7. keep project-specific state as ordinary files when that is the better fit
+8. remove or neutralize stale bootstrap defaults and contradictory startup instructions
 
 ## What To Avoid
 
-- do not let empty default `IDENTITY.md` define the agent
-- do not let generic `BOOTSTRAP.md` override a mature packaged soul
-- do not treat the runtime model name as the agent's identity
-- do not assume every source file deserves a first-class OpenClaw file
-- do not rename a Claude or Codex entry file directly to `SOUL.md` and call that reconstruction
-- do not collapse both identity and workflow into a single huge OpenClaw markdown file unless the source agent is truly that simple
+- do not rename a source entry file directly to `SOUL.md` and call that deployment
+- do not assume every important state file is auto-loaded by OpenClaw
+- do not assume that placing a file in the workspace means the agent will read it
+- do not let `AGENTS.md`, `SOUL.md`, and `BOOTSTRAP.md` give conflicting startup instructions
+- do not let a generic bootstrap file imply the agent has no memory when packaged state exists
+- do not convert every ordinary state file into an OpenClaw-native file if that destroys the original workflow
+- do not keep startup instructions that point to nonexistent files
+- do not preserve the persona while dropping the source file-usage logic that actually makes the agent useful
 
 ## Verification Checklist
 
-After deployment, check:
+After deployment, check both structure and behavior.
 
-- does the agent describe itself using the packaged role/persona rather than generic OpenClaw bootstrap language
-- does it know the durable user/project context it should know
+Structural checks:
+
 - are the expected skills present under `skills/`
+- is `SOUL.md` a real identity anchor rather than a file rename
+- is `AGENTS.md` a real startup and workflow bridge rather than a generic template
+- are stale bootstrap defaults removed or neutralized
+- do startup instructions point to files that actually exist
+
+Behavioral checks:
+
+- does the agent describe itself using the packaged role rather than generic OpenClaw language
+- does it know prior user or project context it should know
+- if asked what it reads before answering, does it name the expected files
+- can it recall prior ideas or project history that live in preserved state files
 - do normal OpenClaw conversations feel like the packaged agent rather than a blank assistant
-
-For cross-runtime deploys, also check:
-
-- is identity clearly anchored in `SOUL.md`
-- is workflow clearly anchored in `AGENTS.md`
-- were curated user/tool/memory files placed into the right OpenClaw-native homes
-- does the restored workspace avoid depending on generic bootstrap defaults
